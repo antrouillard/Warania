@@ -1,0 +1,31 @@
+{
+  "bot_name": "Warania Birthday Bot",
+  "version": "1.0.0",
+  "color": {
+    "primary": "#FF69B4",
+    "success": "#00FF00",
+    "error": "#FF0000",
+    "info": "#3498DB"
+  },
+  "emojis": {
+    "cake": "🎂",
+    "party": "🎉",
+    "gift": "🎁",
+    "balloon": "🎈",
+    "confetti": "🎊"
+  },
+  "months_fr": {
+    "1": "Janvier",
+    "2": "Février",
+    "3": "Mars",
+    "4": "Avril",
+    "5": "Mai",
+    "6": "Juin",
+    "7": "Juillet",
+    "8": "Août",
+    "9": "Septembre",
+    "10": "Octobre",
+    "11": "Novembre",
+    "12": "Décembre"
+  }
+}

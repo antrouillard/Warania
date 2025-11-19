@@ -1,0 +1,8 @@
+# Bot Discord
+py-cord==2.6.1
+
+# Configuration
+python-dotenv==1.0.1
+
+# Utilitaires
+python-dateutil==2.9.0
