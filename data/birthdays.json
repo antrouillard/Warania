@@ -1,16 +1,10 @@
 {
   "birthdays": {
-    "example_user_id": {
-      "username": "Exemple",
-      "day": 1,
-      "month": 1,
-      "year": 2000
-    },
     "257520641178075136": {
       "username": "manaayan",
       "day": 7,
       "month": 2,
-      "year": 2004
+      "year": null
     }
   }
 }

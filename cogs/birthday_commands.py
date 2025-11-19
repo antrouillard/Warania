@@ -38,13 +38,20 @@ class BirthdayCommands(commands.Cog):
         with open(self.data_file, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
     
-    @slash_command(
-        name="anniversaire",
-        description="Commandes pour gérer les anniversaires"
-    )
-    async def birthday(self, ctx):
-        """Commande principale (ne fait rien, utilise les sous-commandes)"""
-        pass
+    def get_display_name(self, guild, user_id):
+        """Récupère le pseudo du serveur ou le nom d'utilisateur"""
+        try:
+            member = guild.get_member(int(user_id))
+            if member:
+                # Utilise le surnom du serveur s'il existe, sinon le display_name
+                return member.display_name
+            # Si le membre n'est pas trouvé, retourne le nom sauvegardé
+            data = self.load_birthdays()
+            if str(user_id) in data['birthdays']:
+                return data['birthdays'][str(user_id)].get('username', 'Utilisateur inconnu')
+            return 'Utilisateur inconnu'
+        except:
+            return 'Utilisateur inconnu'
     
     @slash_command(
         name="anniv_set",
@@ -138,7 +145,14 @@ class BirthdayCommands(commands.Cog):
             # Formatage des anniversaires du mois
             birthdays_text = ""
             for bday in by_month[month]:
-                name = bday['username']
+                # Récupère le pseudo du serveur pour chaque membre
+                user_id = None
+                for uid, info in birthdays.items():
+                    if info == bday:
+                        user_id = uid
+                        break
+                
+                name = self.get_display_name(ctx.guild, user_id) if user_id else bday['username']
                 day = bday['day']
                 year = bday.get('year', '')
                 date_str = f"{day:02d}/{month:02d}/{year}" if year else f"{day:02d}/{month:02d}"
@@ -155,7 +169,7 @@ class BirthdayCommands(commands.Cog):
         await ctx.respond(embed=embed)
     
     @slash_command(
-        name="anniv_next",
+        name="anniv_soon",
         description="Afficher les prochains anniversaires"
     )
     async def next_birthdays(self, ctx):
@@ -184,7 +198,7 @@ class BirthdayCommands(commands.Cog):
             days_until = (bday_next - today).days
             
             upcoming.append({
-                'username': info['username'],
+                'username': self.get_display_name(ctx.guild, user_id),
                 'date': bday_next,
                 'days': days_until,
                 'day': info['day'],
@@ -264,6 +278,14 @@ class BirthdayCommands(commands.Cog):
     ):
         """Supprime l'anniversaire d'un membre (admin uniquement)"""
         
+        # Vérification supplémentaire des permissions
+        if not ctx.author.guild_permissions.administrator:
+            await ctx.respond(
+                "❌ Vous devez être administrateur pour utiliser cette commande.",
+                ephemeral=True
+            )
+            return
+        
         data = self.load_birthdays()
         user_id = str(membre.id)
         
@@ -289,6 +311,14 @@ class BirthdayCommands(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def create_events(self, ctx):
         """Crée des événements Discord pour tous les anniversaires de l'année à venir"""
+        
+        # Vérification supplémentaire des permissions
+        if not ctx.author.guild_permissions.administrator:
+            await ctx.respond(
+                "❌ Vous devez être administrateur pour utiliser cette commande.",
+                ephemeral=True
+            )
+            return
         
         await ctx.defer()  # Indique que le traitement peut prendre du temps
         
@@ -316,13 +346,16 @@ class BirthdayCommands(commands.Cog):
         for user_id, info in birthdays.items():
             try:
                 # Calcul de la date du prochain anniversaire
-                bday_this_year = datetime(today.year, info['month'], info['day'], 14, 0)  # 14h00
+                bday_this_year = datetime(today.year, info['month'], info['day'], 0, 0)  # 14h00
                 
                 if bday_this_year < today:
                     # Si déjà passé cette année, créer pour l'année prochaine
-                    bday_date = datetime(today.year + 1, info['month'], info['day'], 14, 0)
+                    bday_date = datetime(today.year + 1, info['month'], info['day'], 0, 0)
                 else:
                     bday_date = bday_this_year
+                
+                # Récupère le pseudo du serveur
+                display_name = self.get_display_name(guild, user_id)
                 
                 # Calcul de l'âge si disponible
                 age_text = ""
@@ -330,7 +363,7 @@ class BirthdayCommands(commands.Cog):
                     age = bday_date.year - info['year']
                     age_text = f" ({age} ans)"
                 
-                event_name = f"🎂 Anniversaire de {info['username']}{age_text}"
+                event_name = f"🎂 Anniversaire de {display_name}{age_text}"
                 
                 # Vérifier si l'événement existe déjà
                 if event_name.lower() in existing_event_names:
@@ -339,7 +372,7 @@ class BirthdayCommands(commands.Cog):
                 # Création de l'événement (location est simplement une string pour external events)
                 event = await guild.create_scheduled_event(
                     name=event_name,
-                    description=f"Joyeux anniversaire à {info['username']}! 🎉🎊🎁\n\nN'oubliez pas de lui souhaiter un bon anniversaire!",
+                    description=f"Joyeux anniversaire à {display_name}! 🎉🎊🎁\n\nN'oubliez pas de lui souhaiter un bon anniversaire!",
                     start_time=bday_date,
                     end_time=bday_date.replace(hour=23, minute=59),  # Fin de journée
                     location="🎈 Serveur Discord"
@@ -349,13 +382,16 @@ class BirthdayCommands(commands.Cog):
                 
             except discord.Forbidden:
                 events_failed += 1
-                errors.append(f"Permission refusée pour {info['username']}")
+                display_name = self.get_display_name(guild, user_id)
+                errors.append(f"Permission refusée pour {display_name}")
             except discord.HTTPException as e:
                 events_failed += 1
-                errors.append(f"Erreur pour {info['username']}: {str(e)}")
+                display_name = self.get_display_name(guild, user_id)
+                errors.append(f"Erreur pour {display_name}: {str(e)}")
             except Exception as e:
                 events_failed += 1
-                errors.append(f"Erreur inattendue pour {info['username']}: {str(e)}")
+                display_name = self.get_display_name(guild, user_id)
+                errors.append(f"Erreur inattendue pour {display_name}: {str(e)}")
         
         # Message de résultat
         embed = discord.Embed(
@@ -389,6 +425,97 @@ class BirthdayCommands(commands.Cog):
         embed.set_footer(text="💡 Les événements sont créés pour les anniversaires à venir dans l'année")
         
         await ctx.followup.send(embed=embed)
+    
+    @slash_command(
+        name="anniv_delete_events",
+        description="[ADMIN] Supprimer tous les événements d'anniversaires du serveur"
+    )
+    async def delete_events(self, ctx):
+        """Supprime tous les événements d'anniversaires (admin uniquement)"""
+        
+        # Vérification des permissions d'administrateur
+        if not ctx.author.guild_permissions.administrator:
+            await ctx.respond(
+                "❌ Vous devez être administrateur pour utiliser cette commande.",
+                ephemeral=True
+            )
+            return
+        
+        await ctx.defer()
+        
+        guild = ctx.guild
+        if not guild:
+            await ctx.followup.send("❌ Cette commande doit être utilisée sur un serveur.")
+            return
+        
+        try:
+            # Récupération de tous les événements du serveur
+            existing_events = await guild.fetch_scheduled_events()
+            
+            # Filtrer uniquement les événements d'anniversaires (qui commencent par 🎂)
+            birthday_events = [event for event in existing_events if event.name.startswith("🎂")]
+            
+            if not birthday_events:
+                await ctx.followup.send("📭 Aucun événement d'anniversaire trouvé sur le serveur.")
+                return
+            
+            # Compteurs
+            deleted_count = 0
+            failed_count = 0
+            errors = []
+            
+            # Suppression des événements
+            for event in birthday_events:
+                try:
+                    await event.delete()
+                    deleted_count += 1
+                except discord.Forbidden:
+                    failed_count += 1
+                    errors.append(f"Permission refusée pour '{event.name}'")
+                except discord.HTTPException as e:
+                    failed_count += 1
+                    errors.append(f"Erreur pour '{event.name}': {str(e)}")
+                except Exception as e:
+                    failed_count += 1
+                    errors.append(f"Erreur inattendue pour '{event.name}': {str(e)}")
+            
+            # Message de résultat
+            embed = discord.Embed(
+                title=f"🗑️ Suppression d'événements terminée",
+                color=discord.Color.from_rgb(231, 76, 60) if failed_count > 0 else discord.Color.from_rgb(46, 204, 113)
+            )
+            
+            embed.add_field(
+                name="✅ Événements supprimés",
+                value=f"**{deleted_count}** événement(s)",
+                inline=True
+            )
+            
+            if failed_count > 0:
+                embed.add_field(
+                    name="❌ Échecs",
+                    value=f"**{failed_count}** événement(s)",
+                    inline=True
+                )
+                
+                if errors:
+                    error_text = "\n".join(errors[:5])  # Limiter à 5 erreurs
+                    if len(errors) > 5:
+                        error_text += f"\n... et {len(errors) - 5} autre(s) erreur(s)"
+                    embed.add_field(
+                        name="Détails des erreurs",
+                        value=error_text,
+                        inline=False
+                    )
+            
+            embed.set_footer(text="💡 Seuls les événements d'anniversaires (🎂) ont été supprimés")
+            
+            await ctx.followup.send(embed=embed)
+            
+        except discord.Forbidden:
+            await ctx.followup.send("❌ Le bot n'a pas la permission de gérer les événements sur ce serveur.")
+        except Exception as e:
+            await ctx.followup.send(f"❌ Une erreur est survenue : {str(e)}")
 
 def setup(bot):
     bot.add_cog(BirthdayCommands(bot))

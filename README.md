@@ -48,10 +48,11 @@ python main.py
 |----------|-------------|-------------|
 | `/anniv_set <jour> <mois> [année]` | Enregistrer votre anniversaire | Tous |
 | `/anniv_list` | Afficher tous les anniversaires (par mois) | Tous |
-| `/anniv_next` | Voir les 5 prochains anniversaires | Tous |
+| `/anniv_soon` | Voir les 5 prochains anniversaires | Tous |
 | `/anniv_get [@membre]` | Consulter l'anniversaire d'un membre | Tous |
 | `/anniv_remove [@membre]` | Supprimer un anniversaire | Admin |
-| `/anniv_create_events` | 🆕 Créer des événements Discord pour tous les anniversaires | Admin |
+| `/anniv_create_events` | Créer des événements Discord pour tous les anniversaires | Admin |
+| `/anniv_delete_events` | 🆕 Supprimer tous les événements d'anniversaires | Admin |
 
 ## 📁 Structure du projet
 
@@ -101,10 +102,10 @@ Les anniversaires sont stockés dans `data/birthdays.json` :
 {
   "birthdays": {
     "123456789": {
-      "username": "Antoine",
-      "day": 7,
-      "month": 2,
-      "year": 2004
+      "username": "Example",
+      "day": 1,
+      "month": 1,
+      "year": 2000
     }
   }
 }

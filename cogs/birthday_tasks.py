@@ -37,6 +37,20 @@ class BirthdayTasks(commands.Cog):
         except FileNotFoundError:
             return {"birthdays": {}}
     
+    def get_display_name(self, guild, user_id):
+        """Récupère le pseudo du serveur ou le nom d'utilisateur"""
+        try:
+            member = guild.get_member(int(user_id))
+            if member:
+                return member.display_name
+            # Si le membre n'est pas trouvé, retourne le nom sauvegardé
+            data = self.load_birthdays()
+            if str(user_id) in data['birthdays']:
+                return data['birthdays'][str(user_id)].get('username', 'Utilisateur inconnu')
+            return 'Utilisateur inconnu'
+        except:
+            return 'Utilisateur inconnu'
+    
     @tasks.loop(hours=24)
     async def check_birthdays(self):
         """Vérifie quotidiennement les anniversaires et envoie des messages"""
@@ -76,6 +90,10 @@ class BirthdayTasks(commands.Cog):
         for bday in today_birthdays:
             user = await self.bot.fetch_user(int(bday['user_id']))
             
+            # Récupère le pseudo du serveur
+            guild = channel.guild
+            display_name = self.get_display_name(guild, bday['user_id'])
+            
             # Calcul de l'âge si disponible
             age_text = ""
             if bday['year']:
@@ -90,12 +108,12 @@ class BirthdayTasks(commands.Cog):
             )
             
             embed.set_thumbnail(url=user.display_avatar.url)
-            embed.set_footer(text=f"🎊 Bon anniversaire {user.name}! 🎊")
+            embed.set_footer(text=f"🎊 Bon anniversaire {display_name}! 🎊")
             
             await channel.send(embed=embed)
             
             # Création d'un événement Discord (optionnel)
-            await self.create_birthday_event(user, bday)
+            await self.create_birthday_event(user, bday, guild)
     
     @check_birthdays.before_loop
     async def before_check_birthdays(self):
@@ -117,17 +135,20 @@ class BirthdayTasks(commands.Cog):
         
         await discord.utils.sleep_until(next_run)
     
-    async def create_birthday_event(self, user, birthday_info):
+    async def create_birthday_event(self, user, birthday_info, guild):
         """Crée un événement Discord pour l'anniversaire (année prochaine)"""
         
         try:
-            guild_id = os.getenv('GUILD_ID')
-            if not guild_id:
-                return
-            
-            guild = self.bot.get_guild(int(guild_id))
             if not guild:
-                return
+                guild_id = os.getenv('GUILD_ID')
+                if not guild_id:
+                    return
+                guild = self.bot.get_guild(int(guild_id))
+                if not guild:
+                    return
+            
+            # Récupère le pseudo du serveur
+            display_name = self.get_display_name(guild, birthday_info['user_id'])
             
             # Date de l'anniversaire l'année prochaine
             today = datetime.now()
@@ -135,7 +156,7 @@ class BirthdayTasks(commands.Cog):
                 today.year + 1,
                 birthday_info.get('month', today.month),
                 birthday_info.get('day', today.day),
-                14, 0  # 14h00
+                0, 0  # 14h00
             )
             
             # Calcul de l'âge si disponible
@@ -144,28 +165,28 @@ class BirthdayTasks(commands.Cog):
                 age = next_birthday.year - birthday_info['year']
                 age_text = f" ({age} ans)"
             
-            event_name = f"🎂 Anniversaire de {user.name}{age_text}"
+            event_name = f"🎂 Anniversaire de {display_name}{age_text}"
             
             # Vérifier si l'événement existe déjà
             existing_events = await guild.fetch_scheduled_events()
             for event in existing_events:
                 if event.name.lower() == event_name.lower():
-                    print(f"ℹ️ Événement déjà existant pour {user.name}")
+                    print(f"ℹ️ Événement déjà existant pour {display_name}")
                     return
             
             # Création de l'événement (location est simplement une string pour external events)
             await guild.create_scheduled_event(
                 name=event_name,
-                description=f"Joyeux anniversaire à {user.name}! 🎉🎊🎁\n\nN'oubliez pas de lui souhaiter un bon anniversaire!",
+                description=f"Joyeux anniversaire à {display_name}! 🎉🎊🎁\n\nN'oubliez pas de lui souhaiter un bon anniversaire!",
                 start_time=next_birthday,
                 end_time=next_birthday.replace(hour=23, minute=59),  # Fin de journée
                 location="🎈 Serveur Discord"
             )
             
-            print(f"✅ Événement créé pour l'anniversaire de {user.name} (année prochaine)")
+            print(f"✅ Événement créé pour l'anniversaire de {display_name} (année prochaine)")
             
         except discord.Forbidden:
-            print(f"❌ Permission refusée pour créer l'événement de {user.name}")
+            print(f"❌ Permission refusée pour créer l'événement de {display_name}")
         except discord.HTTPException as e:
             print(f"❌ Erreur HTTP lors de la création de l'événement: {e}")
         except Exception as e:
